@@ -1,0 +1,452 @@
+﻿Version=3
+IconFile=
+NumberOfModules=1
+Module1=Settings
+ModuleVisible1=1
+Package=NetRelay.Simple
+DoNotOverwriteManifest=False
+ManifestCode='This code will be applied to the manifest file during compilation.~\n~'You do not need to modify it in most cases.~\n~'See this link for for more information: http://www.basic4ppc.com/forum/showthread.php?p=78136~\n~AddManifestText(~\n~<uses-sdk android:minSdkVersion="4" android:targetSdkVersion="14"/>~\n~<supports-screens android:largeScreens="true" ~\n~    android:normalScreens="true" ~\n~    android:smallScreens="true" ~\n~    android:anyDensity="true"/>)~\n~SetApplicationAttribute(android:icon, "@drawable/icon")~\n~SetApplicationAttribute(android:label, "$LABEL$")~\n~'End of default text.~\n~
+UserTypesHint=
+NumberOfFiles=2
+File1=Main.bal
+File2=Settings.bal
+NumberOfLibraries=4
+Library1=core
+Library2=network
+Library3=phone
+Library4=randomaccessfile
+@EndOfDesignText@
+#Region  Project Attributes 
+	#ApplicationLabel: Ethernet Relay
+	#VersionCode: 1
+	#VersionName: 
+	'SupportedOrientations possible values: unspecified, landscape or portrait.
+	#SupportedOrientations: portrait
+	#CanInstallToExternalStorage: True
+#End Region
+
+#Region  Activity Attributes 
+	#FullScreen: False
+	#IncludeTitle: True
+#End Region
+
+Sub Process_Globals
+	'These global variables will be declared once when the application starts.
+	'These variables can be accessed from all modules.
+	Dim HostName As String 
+	Dim ViewExtChs As Boolean 
+	Dim Timer1 As Timer
+	Dim sock As Socket
+	Dim AStreams As AsyncStreams
+End Sub
+
+Sub Globals
+	'These global variables will be redeclared each time the activity is created.
+	'These variables can only be accessed from this module.
+	Dim ImageView1 As ImageView
+	Dim ImageView2 As ImageView 
+	Dim ImageView3 As ImageView 
+	Dim ImageView4 As ImageView 
+	Dim ImageView5 As ImageView 
+	Dim ImageView6 As ImageView 
+	Dim ImageView7 As ImageView 
+	Dim ImageView8 As ImageView 
+	Dim Label1 As Label
+	Dim Label2 As Label
+	Dim Label3 As Label 
+	Dim Label5 As Label 
+	Dim Label6 As Label 
+	Dim Label7 As Label 
+	Dim Label8 As Label 
+	Dim Label9 As Label
+	Dim Label10 As Label
+	Dim Panel1 As Panel
+	Dim sockBusy As Boolean
+	Dim busyTime As Long 
+	Dim ModuleConnected As Boolean 
+	Dim CommandBuff As String 
+	Dim NewState As String 
+	Dim StateBuff As String
+End Sub
+
+Sub Activity_Create(FirstTime As Boolean)
+	'Do not forget to load the layout file created with the visual designer. For example:
+	Dim s As List
+	
+	Activity.LoadLayout("Main")
+	Activity.AddMenuItem("Settings", "mnuSettings")
+	Activity.AddMenuItem("Documents", "mnuDocuments")
+		
+	If FirstTime Then
+		ViewExtChs = True
+		
+		If File.Exists(File.DirInternal, "AppSettings") Then
+			s = File.ReadList(File.DirInternal, "AppSettings")
+			HostName = s.Get(0)
+			
+			If s.Size >= 2 Then
+				ViewExtChs = s.Get(1) = "Y"
+			End If
+		Else
+			HostName = "192.168.1.100"
+		End If
+	
+		Timer1.Initialize("Timer1", 5000)
+	End If
+End Sub
+
+Sub Activity_Resume
+	Label3.Text = HostName
+	Timer1.Enabled = True
+	ModuleConnected = False
+	
+	If ViewExtChs Then
+		Label1.Left = Label7.Left
+		ImageView1.Left = ImageView5.Left
+		Label2.Left = Label8.Left
+		ImageView2.Left = ImageView6.Left 
+	Else
+		Label1.Left = (Label7.left + Label8.Left) / 2
+		ImageView1.Left = (ImageView5.Left + ImageView6.Left) / 2
+		Label2.Left = (Label9.Left + Label10.Left) / 2
+		ImageView2.Left = (ImageView7.Left + ImageView8.Left) / 2
+	End If
+	
+	Label5.Visible = ViewExtChs
+	Label6.Visible = ViewExtChs
+	Label7.Visible = ViewExtChs
+	Label8.Visible = ViewExtChs
+	Label9.Visible = ViewExtChs
+	Label10.Visible = ViewExtChs
+	
+	ImageView3.Visible = ViewExtChs
+	ImageView4.Visible = ViewExtChs
+	ImageView5.Visible = ViewExtChs
+	ImageView6.Visible = ViewExtChs	
+	ImageView7.Visible = ViewExtChs
+	ImageView8.Visible = ViewExtChs
+	
+	Panel1.Visible = False
+	EnableExtChs(True)
+
+	Timer1_Tick
+End Sub
+
+Sub Activity_Pause (UserClosed As Boolean)
+	Timer1.Enabled = False
+	
+	If sockBusy Then
+		If AStreams.IsInitialized Then
+			AStreams.Close
+		End If
+		
+		If sock.IsInitialized Then
+			sock.Close
+		End If
+		sockBusy = False
+	End If			
+End Sub
+
+Sub Timer1_Tick
+	If sockBusy Then
+		If sock.Connected Then
+			If DateTime.Now - busyTime > DateTime.TicksPerSecond * 10 Then
+				If AStreams.IsInitialized Then
+					AStreams.Close
+				End If
+		
+				sock.Close
+				sockBusy = False
+			End If
+		End If
+	Else
+		Timer1.Interval = 5000
+	
+		sockBusy = True 
+		sock.Initialize("sock")
+		sock.Connect(HostName, 6722, 10000)
+		busyTime = DateTime.Now
+	End If
+End Sub
+
+Sub sock_Connected (Successful As Boolean)
+	If Successful Then 
+		ModuleConnected = True
+		AStreams.Initialize(sock.InputStream, sock.OutputStream, "AStreams")
+		If CommandBuff = "" Then
+			AStreams.Write("00".GetBytes("ASCII"))
+		Else
+			AStreams.Write(CommandBuff.GetBytes("ASCII"))
+			CommandBuff = ""
+		End If
+	Else
+		SetModuleOffline
+	End If
+End Sub
+
+Sub AStreams_Error
+	AStreams.Close
+	SetModuleOffline
+End Sub
+
+Sub AStreams_NewData (Buffer() As Byte)
+	NewState = BytesToString(Buffer, 0, Buffer.Length, "ASCII")
+	AStreams.Close
+	ParseModuleState
+	sock.Close	
+	Panel1.Visible = False
+	EnableExtChs(True)
+	sockBusy = False 
+End Sub
+
+Sub mnuSettings_Click
+	StartActivity("Settings")	
+End Sub
+
+Sub mnuDocuments_Click
+	Dim p As PhoneIntents    
+	StartActivity(p.OpenBrowser("http://tech.tutuuu.com/sr-201"))	
+End Sub
+
+Sub SetModuleOffline
+	ModuleConnected = False
+	StateBuff = ""
+	
+	ImageView1.Bitmap = LoadBitmap(File.DirAssets, "btn_disable.png")
+	ImageView1.Invalidate
+	ImageView2.Bitmap = LoadBitmap(File.DirAssets, "btn_disable.png")	
+	ImageView2.Invalidate
+	
+	ImageView3.Bitmap = LoadBitmap(File.DirAssets, "btn_disable.png")	
+	ImageView3.Invalidate
+	ImageView4.Bitmap = LoadBitmap(File.DirAssets, "btn_disable.png")	
+	ImageView4.Invalidate
+	ImageView5.Bitmap = LoadBitmap(File.DirAssets, "btn_disable.png")	
+	ImageView5.Invalidate
+	ImageView6.Bitmap = LoadBitmap(File.DirAssets, "btn_disable.png")	
+	ImageView6.Invalidate
+	ImageView7.Bitmap = LoadBitmap(File.DirAssets, "btn_disable.png")	
+	ImageView7.Invalidate
+	ImageView8.Bitmap = LoadBitmap(File.DirAssets, "btn_disable.png")	
+	ImageView8.Invalidate
+	
+	Panel1.Visible = False
+	EnableExtChs(True)
+	
+	sock.Close
+	sockBusy = False
+End Sub
+
+Sub EnableExtChs(Enabled As Boolean)
+	If ViewExtChs Then
+		ImageView5.Enabled = Enabled
+		ImageView6.Enabled = Enabled
+		ImageView7.Enabled = Enabled
+		ImageView8.Enabled = Enabled
+	End If
+End Sub
+
+Sub ParseModuleState
+	If StateBuff = "" OR NewState.CharAt(0) <> StateBuff.CharAt(0) Then
+		If NewState.CharAt(0) = "1" Then
+			ImageView1.Bitmap = LoadBitmap(File.DirAssets, "btn_on.png")
+		Else
+			ImageView1.Bitmap = LoadBitmap(File.DirAssets, "btn_off.png")
+		End If
+		ImageView1.Invalidate
+	End If
+	
+	If StateBuff = "" OR NewState.CharAt(1) <> StateBuff.CharAt(1) Then
+		If NewState.CharAt(1) = "1" Then
+			ImageView2.Bitmap = LoadBitmap(File.DirAssets, "btn_on.png")
+		Else
+			ImageView2.Bitmap = LoadBitmap(File.DirAssets, "btn_off.png")
+		End If
+		ImageView2.Invalidate
+	End If
+	
+	If StateBuff = "" OR NewState.CharAt(2) <> StateBuff.CharAt(2) Then
+		If NewState.CharAt(2) = "1" Then
+			ImageView3.Bitmap = LoadBitmap(File.DirAssets, "btn_on.png")
+		Else
+			ImageView3.Bitmap = LoadBitmap(File.DirAssets, "btn_off.png")
+		End If
+		ImageView3.Invalidate
+	End If
+
+	If StateBuff = "" OR NewState.CharAt(3) <> StateBuff.CharAt(3) Then
+		If NewState.CharAt(3) = "1" Then
+			ImageView4.Bitmap = LoadBitmap(File.DirAssets, "btn_on.png")
+		Else
+			ImageView4.Bitmap = LoadBitmap(File.DirAssets, "btn_off.png")
+		End If
+		ImageView4.Invalidate
+	End If
+
+	If StateBuff = "" OR NewState.CharAt(4) <> StateBuff.CharAt(4) Then
+		If NewState.CharAt(4) = "1" Then
+			ImageView5.Bitmap = LoadBitmap(File.DirAssets, "btn_on.png")
+		Else
+			ImageView5.Bitmap = LoadBitmap(File.DirAssets, "btn_off.png")
+		End If
+		ImageView5.Invalidate
+	End If
+
+	If StateBuff = "" OR NewState.CharAt(5) <> StateBuff.CharAt(5) Then
+		If NewState.CharAt(5) = "1" Then
+			ImageView6.Bitmap = LoadBitmap(File.DirAssets, "btn_on.png")
+		Else
+			ImageView6.Bitmap = LoadBitmap(File.DirAssets, "btn_off.png")
+		End If
+		ImageView6.Invalidate
+	End If
+
+	If NewState.Length >= 7 Then
+		If StateBuff = "" OR NewState.CharAt(6) <> StateBuff.CharAt(6) Then
+			If NewState.CharAt(6) = "1" Then
+				ImageView7.Bitmap = LoadBitmap(File.DirAssets, "btn_on.png")
+			Else
+				ImageView7.Bitmap = LoadBitmap(File.DirAssets, "btn_off.png")
+			End If
+			ImageView7.Invalidate
+		End If
+		
+	
+		If NewState.Length >= 8 Then
+			If StateBuff = "" OR NewState.CharAt(7) <> StateBuff.CharAt(7) Then
+				If NewState.CharAt(7) = "1" Then
+					ImageView8.Bitmap = LoadBitmap(File.DirAssets, "btn_on.png")
+				Else
+					ImageView8.Bitmap = LoadBitmap(File.DirAssets, "btn_off.png")
+				End If
+				ImageView8.Invalidate
+			End If
+		End If
+	End If
+
+	StateBuff = NewState
+End Sub
+
+Sub ImageView1_Click
+	If ModuleConnected Then
+		Panel1.Visible = True
+		EnableExtChs(False)
+		
+		If StateBuff.CharAt(0) = "0" Then
+			CommandBuff = "11"
+		Else
+			CommandBuff = "21"
+		End If		
+		
+		Timer1.Interval = 250
+	End If
+End Sub
+
+Sub ImageView2_Click
+	If ModuleConnected Then
+		Panel1.Visible = True
+		EnableExtChs(False)
+		
+		If StateBuff.CharAt(1) = "0" Then
+			CommandBuff = "12"
+		Else
+			CommandBuff = "22"
+		End If		
+		
+		Timer1.Interval = 250
+	End If	
+End Sub
+
+Sub ImageView3_Click
+	If ModuleConnected Then
+		Panel1.Visible = True
+		EnableExtChs(False)
+		
+		If StateBuff.CharAt(2) = "0" Then
+			CommandBuff = "13"
+		Else
+			CommandBuff = "23"
+		End If		
+		
+		Timer1.Interval = 250
+	End If	
+End Sub
+
+Sub ImageView4_Click
+	If ModuleConnected Then
+		Panel1.Visible = True
+		EnableExtChs(False)
+		
+		If StateBuff.CharAt(3) = "0" Then
+			CommandBuff = "14"
+		Else
+			CommandBuff = "24"
+		End If		
+		
+		Timer1.Interval = 250
+	End If	
+End Sub
+
+Sub ImageView5_Click
+	If ModuleConnected Then
+		Panel1.Visible = True
+		EnableExtChs(False)
+		
+		If StateBuff.CharAt(4) = "0" Then
+			CommandBuff = "15"
+		Else
+			CommandBuff = "25"
+		End If		
+		
+		Timer1.Interval = 250
+	End If	
+End Sub
+
+Sub ImageView6_Click
+	If ModuleConnected Then
+		Panel1.Visible = True
+		EnableExtChs(False)
+		
+		If StateBuff.CharAt(5) = "0" Then
+			CommandBuff = "16"
+		Else
+			CommandBuff = "26"
+		End If		
+		
+		Timer1.Interval = 250
+	End If	
+End Sub
+
+Sub ImageView7_Click
+	If StateBuff.Length >= 7 Then
+		If ModuleConnected Then
+			Panel1.Visible = True
+			EnableExtChs(False)
+			
+			If StateBuff.CharAt(6) = "0" Then
+				CommandBuff = "17"
+			Else
+				CommandBuff = "27"
+			End If		
+			
+			Timer1.Interval = 250
+		End If		
+	End If
+End Sub
+
+Sub ImageView8_Click
+	If StateBuff.Length >= 8 Then
+		If ModuleConnected Then
+			Panel1.Visible = True
+			EnableExtChs(False)
+			
+			If StateBuff.CharAt(7) = "0" Then
+				CommandBuff = "18"
+			Else
+				CommandBuff = "28"
+			End If		
+			
+			Timer1.Interval = 250
+		End If		
+	End If
+End Sub

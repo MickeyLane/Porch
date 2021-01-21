@@ -35,14 +35,14 @@ my $invoked_by_unknown_flag = 0;
 my $cwd = Cwd::cwd();
 my $i = rindex ($cwd, '/');
 my $cur_dir = substr ($cwd, $i + 1);
-# if ($cur_dir eq 'cgi-bin') {
-#     #
-#     # Go up one level from cgi-bin so lookup and data are subdirectories
-#     #
-#     chdir ('..');
-#     $cwd = Cwd::cwd();
-#     $cur_dir = substr ($cwd, $i + 1);
-# }
+if ($cur_dir eq 'cgi-bin') {
+    #
+    # Go up one level from cgi-bin so lookup is a subdirectory
+    #
+    chdir ('..');
+    $cwd = Cwd::cwd();
+    $cur_dir = substr ($cwd, $i + 1);
+}
 
 #
 # Get input
@@ -81,10 +81,10 @@ if ($invoked_by_unknown_flag == 0) {
         my ($key, $value) = split (/=/, $pair);
 
         if ($key eq 'sign') {
-            $sign_command = uc $value;
+            $sign_command = lc $value;
         }
         elsif ($key eq 'lights') {
-            $lights_command = uc $value;
+            $lights_command = lc $value;
         }
         # elsif ($key eq 'exac') {
         #     #
@@ -138,9 +138,7 @@ print ("<body>\n");
 
 
 if ($invoked_by_unknown_flag) {
-    print ("<pre>\n");
-    print ("   Failure to open get input data<br>\n");
-    print ("</pre>\n");
+    print ("Failure to open get input data\n");
     print ("</body>\n");
     print ("</html>\n\n\n");
     exit (0);
@@ -151,33 +149,59 @@ my $lightstate;
 my $signstate;
 
 ($status, $lightstate, $signstate) = relay_board_interface::get_current_state ();
-
 if (!$status) {
-    print ("<pre>\n");
-    print ("   Failure to get relay status\n");
-    print ("</pre>\n");
+    print ("Failure to get relay status\n");
     print ("</body>\n");
     print ("</html>\n\n\n");
     exit (0);
 }
 
-print ("<pre>\n");
+#
+# If the input form (or whatever) did not specify a light state, set the command
+# variable to the same as the current state. Do the same for the sign
+#
+if (!(defined ($lights_command))) {
+    $lights_command = $lightstate;
+}
+if (!(defined ($sign_command))) {
+    $sign_command = $signstate;
+}
 
-print ("\n");
+if ($lights_command ne 'on' && $lights_command ne 'off') {
+    print ("Lights value is $lights_command\n");
+    print ("</body>\n");
+    print ("</html>\n\n\n");
+    exit (0);
+}
 
-if ($screen_format eq 'mobile') {
-    print ("   Dates may be machine generated guesses<br> so use them as suggestions only\n");
+
+#
+# If the current state is not the same as the command, issue a command to the relay
+#
+if ($lightstate ne $lights_command) {
+}
+
+<form action="/cgi-bin/pb.pl" method="post" id="return_post">
+    <p>
+        <input type="hidden" name="format" value="desktop">
+    </p>
+</form>
+
+if ($lightstate) {
+    print ("<button type=\"submit\" name=\"lights\" value=\"off\"> form=\"return_post\"\n");
+    print ("<img src=\"/on_1.jpg\"\n>");
+    # print ("<img src=\"/on_1.jpg\">\n");
 }
 else {
-    print ("   Dates may be machine generated guesses so use them as suggestions only\n");
+    print ("<button type=\"submit\" name=\"lights\" value=\"on\"> form=\"return_post\"\n");
+    print ("<img src=\"/off_1.jpg\"\n>");
+    # print ("<img src=\"/off_1.jpg\">\n");
 }
+print ("</button>\n");
 
 
-print ("</p>\n");
 
 
-print ("</pre>\n");
-# print ("</div>\n");
 print ("</body>\n");
 print ("</html>\n\n\n");
 exit (0);
